@@ -102,9 +102,11 @@ def process(inpt_dir, otpt_dir, file):
                 pc = etree.SubElement(p, 'pc')
 
                 pc.text = node.text
-                tp = node.get('type')
-                if tp:
-                    pc.set('type', tp)
+                pc.set('ana', node.get('ana'))
+
+            elif node.tag == 'g':
+                g = etree.SubElement(p, 'g')
+                g.text = node.text
 
     inpt.close()
     os.chdir(otpt_dir)
@@ -116,6 +118,6 @@ def process(inpt_dir, otpt_dir, file):
 
 if __name__ == '__main__':
     try:
-        process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW_PC.xml')
+        process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW_NEW.xml')
     except FileNotFoundError:
         print('Error: source data directory missing.')
