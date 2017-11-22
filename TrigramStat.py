@@ -1,3 +1,4 @@
+import os
 import xml.etree.ElementTree as ET
 
 
@@ -29,7 +30,7 @@ def get_trigrams(file):
             lim = i + 3
 
             # Удаляем нехорошие
-            if "pc,Tr" in (splts[i], splts[i + 1]):
+            if {"pc,Tr", "pc,Tr,Nt"} & {splts[i], splts[i + 1]}:
                 continue
             else:
                 trig_line = str(splts[i:lim]).replace("'", "").replace("[", "").replace("]", "")
@@ -49,6 +50,6 @@ def get_trigrams(file):
 
 if __name__ == '__main__':
     try:
-        get_trigrams('LAW_PC.xml')
+        get_trigrams(os.getcwd + '\\gold\\LAW_TEST.xml')
     except FileNotFoundError:
         print('Error: file not found.')
