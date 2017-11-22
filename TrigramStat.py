@@ -2,7 +2,9 @@ import os
 import xml.etree.ElementTree as ET
 
 
-def get_trigrams(file):
+def get_trigrams(inpt_dir, file):
+    os.chdir(inpt_dir)
+
     tree = ET.parse(file)
     root = tree.getroot()
     trig_dict = {}
@@ -17,11 +19,8 @@ def get_trigrams(file):
                 ana = elem.get("ana")
                 ts += str(ana)+" "
             # И теги пунктуации
-            else:
-                if elem.get("type"):
-                    ts += str(elem.tag) + "," + str(elem.get("type") + " ")
-                else:
-                    ts += str(elem.tag) + " "
+            elif elem.tag == 'pc':
+                ts += str(elem.tag) + "," + str(elem.get("ana") + " ")
 
         splts = ts.split()
 
@@ -50,6 +49,6 @@ def get_trigrams(file):
 
 if __name__ == '__main__':
     try:
-        get_trigrams(os.getcwd + '\\gold\\LAW_TEST.xml')
+        get_trigrams(os.getcwd() + '\\gold', 'LAW.xml')
     except FileNotFoundError:
-        print('Error: file not found.')
+        print('Error: source file missing.')

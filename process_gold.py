@@ -1,7 +1,32 @@
 import os
+import re
 from lxml import etree
 import tags
 import conj
+
+
+def format_text(s):
+    # Стандартизируем отступы
+    s = re.sub(' {4}\s+', '    ', s)
+
+    # Неоднозначные ЗП: точка, запятая, двоеточие, тире
+    # Учитываются сочетания ЗП слева типа (крайний случай) ..."),
+    # а также повторения самого знака (до трёх)
+    s = re.sub(' {4}([.?!]{0,3}[(")[\]]{0,2}[.,:-]{1,3})(?=[\n\r])',
+               '    <pc ana="Nt,Tr">\\1</pc>', s)
+
+    # Однозначно терминальные ЗП: вопросительный и восклицательный знаки, точка с запятой и скобки
+    # Им может предшествовать кавычка; сами могут вступать в комбинации (длиной до трёх символов)
+    s = re.sub(' {4}("?[?!;()[\]]{1,3})(?=[\n\r])',
+               '    <pc ana="Tr">\\1</pc>', s)
+
+    # Единственный однозначно нетерминальный ЗП - кавычка
+    s = re.sub(' {4}(")(?=[\n\r])', '    <pc ana="Nt">\\1</pc>', s)
+
+    # Всё, что осталось, оформляем как glyph
+    s = re.sub(' {4}(?!<)(.+)', '    <g>\\1</g>', s)
+
+    return s
 
 
 def format_tag(ps, ts):
@@ -82,13 +107,14 @@ def process(inpt_dir, otpt_dir, file):
     inpt = open(file, mode='r', encoding='utf-8')
     print('Please wait. Python is processing your data...')
 
+    text = format_text(inpt.read())
+
     parser = etree.XMLParser(huge_tree=True)
-    tree = etree.parse(inpt, parser)
-    text = tree.getroot()
+    root = etree.fromstring(text, parser)
     otpt_tree = etree.Element('text')
     glyph_log = ''
 
-    for i, par in enumerate(text):
+    for i, par in enumerate(root):
         p = etree.SubElement(otpt_tree, 'p')
         p.set('n', str(i + 1))
 
@@ -102,9 +128,9 @@ def process(inpt_dir, otpt_dir, file):
                     pc.text = node.text
 
                     # Если следующий узел - союз из списка Арины, то это терминал
-                    if ((next_node.get('gr') == 'CONJ' and next_node.get('lex') in conj.conj_sing)
-                            or ((next_pair[0].get('lex'), next_pair[1].get('lex')) in conj.conj_doub)):
-                        pc.set('ana', 'Tr')
+                    if ((next_node.get('gr') == 'CONJ' and next_node.get('lex') in conj.sing)
+                            or ((next_pair[0].get('lex'), next_pair[1].get('lex')) in conj.doub)):
+                        pc.set('ana', 'Tr,Nt')
                     else:
                         pc.set('ana', node.get('ana'))
 
@@ -114,7 +140,7 @@ def process(inpt_dir, otpt_dir, file):
                 if node.tag == 'pc':
                     pc = etree.SubElement(p, 'pc')
                     pc.text = node.text
-                    pc.set('ana', 'Tr')
+                    pc.set('ana', 'Tr,Nt')
 
             finally:
                 if node.tag == 'w':
@@ -145,6 +171,6 @@ def process(inpt_dir, otpt_dir, file):
 
 if __name__ == '__main__':
     try:
-        process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW_TEST.xml')
+        process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW.xml')
     except FileNotFoundError:
         print('Error: source data directory missing.')
