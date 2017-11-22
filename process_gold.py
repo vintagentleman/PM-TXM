@@ -1,6 +1,7 @@
 import os
 from lxml import etree
 import tags
+import conj
 
 
 def format_tag(ps, ts):
@@ -85,26 +86,51 @@ def process(inpt_dir, otpt_dir, file):
     tree = etree.parse(inpt, parser)
     text = tree.getroot()
     otpt_tree = etree.Element('text')
+    glyph_log = ''
 
-    for par in text:
+    for i, par in enumerate(text):
         p = etree.SubElement(otpt_tree, 'p')
+        p.set('n', str(i + 1))
 
-        for node in par:
-            if node.tag == 'w':
-                w = etree.SubElement(p, 'w')
-                ana = format_parse(node.get('gr').split(';'))
+        for j, node in enumerate(par):
+            try:
+                next_node = par[j + 1]
+                next_pair = (par[i + 1], par[i + 2])
 
-                w.text = node.text
-                w.set('lemma', node.get('lex'))
-                w.set('ana', ana)
+                if node.tag == 'pc':
+                    pc = etree.SubElement(p, 'pc')
+                    pc.text = node.text
 
-            elif node.tag == 'pc':
-                pc = etree.SubElement(p, 'pc')
+                    # Если следующий узел - союз из списка Арины, то это терминал
+                    if ((next_node.get('gr') == 'CONJ' and next_node.get('lex') in conj.conj_sing)
+                            or ((next_pair[0].get('lex'), next_pair[1].get('lex')) in conj.conj_doub)):
+                        pc.set('ana', 'Tr')
+                    else:
+                        pc.set('ana', node.get('ana'))
 
-                pc.text = node.text
-                tp = node.get('type')
-                if tp:
-                    pc.set('type', tp)
+            # Если возбуждается исключение, то мы дошли до предпоследнего узла
+            # Если это знак препинания, то это определённо терминал
+            except IndexError:
+                if node.tag == 'pc':
+                    pc = etree.SubElement(p, 'pc')
+                    pc.text = node.text
+                    pc.set('ana', 'Tr')
+
+            finally:
+                if node.tag == 'w':
+                    w = etree.SubElement(p, 'w')
+                    ana = format_parse(node.get('gr').split(';'))
+
+                    w.text = node.text
+                    w.set('lemma', node.get('lex'))
+                    w.set('ana', ana)
+
+                elif node.tag == 'g':
+                    g = etree.SubElement(p, 'g')
+                    g.text = node.text
+
+                    # Висячие символы попутно фиксируем
+                    glyph_log += '%d\t%s\n' % (i + 1, g.text)
 
     inpt.close()
     os.chdir(otpt_dir)
@@ -113,9 +139,12 @@ def process(inpt_dir, otpt_dir, file):
         xml = etree.tostring(otpt_tree, method='xml', encoding='utf-8', xml_declaration=True, pretty_print=True)
         otpt.write(xml.decode())
 
+    with open('glyph_log.csv', mode='w', encoding='utf-8') as log:
+        log.write(glyph_log)
+
 
 if __name__ == '__main__':
     try:
-        process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW_PC.xml')
+        process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW_TEST.xml')
     except FileNotFoundError:
         print('Error: source data directory missing.')

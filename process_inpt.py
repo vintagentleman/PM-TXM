@@ -45,7 +45,7 @@ def format_parse(pt):
             if number == 'Pl':
                 gender = format_tag(parse.tag.gender)
 
-        elif pos is None:
+        elif pos == '_':
             pos = format_tag(str(parse.tag).split(',')[0])
 
         if all(grammeme == '_' for grammeme in (animacy, case, number, gender, person, aspect)):
@@ -55,15 +55,20 @@ def format_parse(pt):
 
     # Если мест.-пред., то отсекаем сущ.
     for i, p in enumerate(ana):
-        if p.startswith('Pp'):
+        if p.startswith('Pd'):
             ana = ana[:i + 1] + [p for p in ana[i + 1:] if not p.startswith('Nn')]
 
     # Если союз, пред. или част., то отсекаем сущ., прил., мест. и межд.
     for i, p in enumerate(ana):
-        if p.startswith(('Cj', 'Pr', 'Pc')):
+        if p.startswith(('Cj', 'Pp', 'Pc')):
             ana = ana[:i + 1] + [p for p in ana[i + 1:] if not p.startswith(('Nn', 'Aj', 'Pn', 'Ij'))]
 
-    return ana
+    result = []
+    for item in ana:
+        if item not in result:
+            result += [item]
+
+    return result
 
 
 def process(inpt_dir, otpt_dir):
