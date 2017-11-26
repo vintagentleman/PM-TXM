@@ -1,7 +1,8 @@
 import glob
 import os
 import nltk
-from lxml import etree
+from xml.etree import ElementTree as etree
+from xml.dom.minidom import parseString
 from pymorphy2 import MorphAnalyzer
 from tags import pymorphy_all
 
@@ -116,8 +117,9 @@ def process(inpt_dir, otpt_dir):
 
         # Записываем в XML
         with open(file[:-3] + 'xml', mode='w', encoding='utf-8') as out:
-            xml = etree.tostring(root, method='xml', encoding='utf-8', xml_declaration=True, pretty_print=True)
-            out.write(xml.decode())
+            xml = etree.tostring(root, method='xml', encoding='utf-8')
+            pretty = parseString(xml).toprettyxml(indent='  ', encoding='utf-8')
+            out.write(pretty.decode())
 
         # Возвращаемся во входную директорию - к файлам на очереди
         os.chdir(inpt_dir)
