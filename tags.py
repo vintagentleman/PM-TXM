@@ -29,6 +29,7 @@ gold_pos = {
 gold_animacy = {
     'anim': 'An',
     'inan': 'In',
+    '|animation': 'Zz',
 }
 
 gold_case = {
@@ -42,28 +43,33 @@ gold_case = {
     'gen2': 'Gn',
     'loc2': 'Lc',
     'acc2': 'Ac',
+    '|case': 'Zz',
 }
 
 gold_number = {
     'sg': 'Sg',
     'pl': 'Pl',
+    '|number': 'Zz',
 }
 
 gold_gender = {
     'm': 'Ms',
     'f': 'Fm',
     'n': 'Nr',
+    '|gender': 'Zz',
 }
 
 gold_person = {
     '1p': 'Fs',
     '2p': 'Sc',
     '3p': 'Th',
+    '|person': 'Zz',
 }
 
 gold_aspect = {
     'pf': 'Pf',
     'ipf': 'Im',
+    '|aspect': 'Zz',
 }
 
 pymorphy_all = {
@@ -102,9 +108,9 @@ pymorphy_all = {
     'sing': 'Sg',
     'plur': 'Pl',
 
-    'm': 'Ms',
-    'f': 'Fm',
-    'n': 'Nr',
+    'masc': 'Ms',
+    'femn': 'Fm',
+    'neut': 'Nr',
 
     '1per': 'Fs',
     '2per': 'Sc',

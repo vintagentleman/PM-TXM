@@ -7,30 +7,32 @@ import conj
 
 def format_text(s):
     # Стандартизируем отступы
-    s = re.sub(' {4}\s+', '    ', s)
+    s = re.sub(r' {4}\s+', '    ', s)
 
     # Неоднозначные ЗП: точка, запятая, двоеточие, тире
     # Учитываются сочетания ЗП слева типа (крайний случай) ..."),
     # а также повторения самого знака (до трёх)
-    s = re.sub(' {4}([.?!]{0,3}[(")[\]]{0,2}[.,:-]{1,3})(?=[\n\r])',
-               '    <pc ana="Nt,Tr">\\1</pc>', s)
+    s = re.sub(r' {4}([.?!]{0,3}[(")[\]]{0,2}[.,:-]{1,3})(?=[\n\r])', '    <pc ana="Nt,Tr">\\1</pc>', s)
 
     # Однозначно терминальные ЗП: вопросительный и восклицательный знаки, точка с запятой и скобки
-    # Им может предшествовать кавычка; сами могут вступать в комбинации (длиной до трёх символов)
-    s = re.sub(' {4}("?[?!;()[\]]{1,3})(?=[\n\r])',
-               '    <pc ana="Tr">\\1</pc>', s)
+    # Могут быть заключены в кавычки; сами могут вступать в комбинации (длиной до трёх символов)
+    s = re.sub(r' {4}("?[?!;()[\]]{1,3}"?)(?=[\n\r])', '    <pc ana="Tr,_">\\1</pc>', s)
 
     # Единственный однозначно нетерминальный ЗП - кавычка
-    s = re.sub(' {4}(")(?=[\n\r])', '    <pc ana="Nt">\\1</pc>', s)
+    s = re.sub(r' {4}(")(?=[\n\r])', '    <pc ana="Nt,_">\\1</pc>', s)
+
+    # Сокращения и прочее
+    s = re.sub(r' {4}((в|вв|г|др|пр)\.)(?=[\n\r])', '    <w lex="\\1" gr="S,inan,|gender,|case,|number">\\1</w>', s)
+    s = re.sub(r' {4}(т\. ?к\.)(?=[\n\r])', '    <w lex="\\1" gr="CONJ">\\1</w>', s)
+    s = re.sub(r' {4}(\w\s*\))', '    <w lex="\\1" gr="NONLEX">\\1</w>', s)
 
     # Всё, что осталось, оформляем как glyph
-    s = re.sub(' {4}(?!<)(.+)', '    <g>\\1</g>', s)
+    s = re.sub(r' {4}(?!<)(.+)', '    <g>\\1</g>', s)
 
     return s
 
 
 def format_tag(ps, ts):
-
     for t in ps:
         if t in ts:
             return ts[t]
@@ -121,26 +123,27 @@ def process(inpt_dir, otpt_dir, file):
         for j, node in enumerate(par):
             try:
                 next_node = par[j + 1]
-                next_pair = (par[i + 1], par[i + 2])
+                next_pair = (par[j + 1], par[j + 2])
 
                 if node.tag == 'pc':
                     pc = etree.SubElement(p, 'pc')
                     pc.text = node.text
 
                     # Если следующий узел - союз из списка Арины, то это терминал
-                    if ((next_node.get('gr') == 'CONJ' and next_node.get('lex') in conj.sing)
-                            or ((next_pair[0].get('lex'), next_pair[1].get('lex')) in conj.doub)):
-                        pc.set('ana', 'Tr,Nt')
+                    if (next_node.get('gr') == 'CONJ' and next_node.get('lex') in conj.sing
+                            or (next_pair[0].get('lex'), next_pair[1].get('lex')) in conj.doub):
+                        pc.set('ana', 'Tr,_')
+                    # If all else fails, признаём неоднозначность
                     else:
                         pc.set('ana', node.get('ana'))
 
-            # Если возбуждается исключение, то мы дошли до предпоследнего узла
+            # Если возбуждается исключение, то мы дошли до (пред)последнего узла
             # Если это знак препинания, то это определённо терминал
             except IndexError:
                 if node.tag == 'pc':
                     pc = etree.SubElement(p, 'pc')
                     pc.text = node.text
-                    pc.set('ana', 'Tr,Nt')
+                    pc.set('ana', 'Tr,_')
 
             finally:
                 if node.tag == 'w':
