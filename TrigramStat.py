@@ -1,5 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
+import csv
 
 
 def get_trigrams(inpt_dir, file):
@@ -32,19 +33,18 @@ def get_trigrams(inpt_dir, file):
             if {"pc,Tr", "pc,Tr,Nt"} & {splts[i], splts[i + 1]}:
                 continue
             else:
-                trig_line = str(splts[i:lim]).replace("'", "").replace("[", "").replace("]", "")
-
-                if trig_line in trig_dict:
-                    trig_dict[trig_line] += 1
-                else:
-                    trig_dict[trig_line] = 1
+                trig_line = tuple(splts[i:lim])
+                trig_dict.setdefault(trig_line, 0)
+                trig_dict[trig_line] += 1
 
     # Это теперь не словарь, а список кортежей. Но это неважно
     trig_sort = sorted(trig_dict.items(), key=lambda x: -x[1])
 
-    with open('trigrams.txt', mode='w', encoding='utf-8') as otpt:
+    with open('trigrams.csv', mode='w', encoding='utf-8', newline='') as otpt:
+        writer = csv.writer(otpt, delimiter=';')
+
         for pair in trig_sort:
-            otpt.write('%s;%s\n' % pair)
+            writer.writerow(list(pair[0]) + [pair[1]])
 
 
 if __name__ == '__main__':

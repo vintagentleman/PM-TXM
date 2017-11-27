@@ -85,7 +85,7 @@ def process(inpt_dir, otpt_dir):
 
     # Файлы с текстами обрабатываем поштучно
     for file in files:
-        f = open(file, mode='r', encoding='utf-8')
+        f = open(file, mode='r', encoding='windows-1251')
         root = etree.Element('text')
         lines = f.readlines()
 
