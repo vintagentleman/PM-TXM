@@ -1,14 +1,17 @@
 import os
+# import glob
 import xml.etree.ElementTree as ET
 import csv
 
 
-def get_trigrams(inpt_dir, file):
+def get_trigrams(inpt_dir, file='ZHURGAZ.xml'):
     os.chdir(inpt_dir)
+    # files = glob.glob('*.xml')
+    trig_dict = {}
 
+    # for file in files:
     tree = ET.parse(file)
     root = tree.getroot()
-    trig_dict = {}
 
     # Пробегаемся по всем предложениям в файле
     for p in root:
@@ -49,6 +52,6 @@ def get_trigrams(inpt_dir, file):
 
 if __name__ == '__main__':
     try:
-        get_trigrams(os.getcwd() + '\\gold', 'LAW.xml')
+        get_trigrams(os.getcwd() + '\\otpt')
     except FileNotFoundError:
         print('Error: source file missing.')

@@ -6,24 +6,28 @@ import conj
 
 
 def format_text(s):
-    # Стандартизируем отступы
-    s = re.sub(r' {4}\s+', '    ', s)
-
-    # Неоднозначные ЗП: точка, запятая, двоеточие, тире
-    # Учитываются сочетания ЗП слева типа (крайний случай) ..."),
-    # а также повторения самого знака (до трёх)
-    s = re.sub(r' {4}([.?!]{0,3}[(")[\]]{0,2}[.,:-]{1,3})(?=[\n\r])', '    <pc ana="Nt,Tr">\\1</pc>', s)
+    nt_tr = '.,:\-'
+    tr = '?!;()[\]'
+    br = '()[\]'
+    qu = '«»„““\"”‘’'
 
     # Однозначно терминальные ЗП: вопросительный и восклицательный знаки, точка с запятой и скобки
-    # Могут быть заключены в кавычки; сами могут вступать в комбинации (длиной до трёх символов)
-    s = re.sub(r' {4}("?[?!;()[\]]{1,3}"?)(?=[\n\r])', '    <pc ana="Tr,_">\\1</pc>', s)
+    s = re.sub(r' {4}([%s]?[%s]+"?)(?=[\n\r])' % (qu, tr),
+               '    <pc ana="Tr,_">\\1</pc>', s)
 
     # Единственный однозначно нетерминальный ЗП - кавычка
-    s = re.sub(r' {4}(")(?=[\n\r])', '    <pc ana="Nt,_">\\1</pc>', s)
+    s = re.sub(r' {4}([%s]+)(?=[\n\r])' % qu,
+               '    <pc ana="Nt,_">\\1</pc>', s)
+
+    # Неоднозначные ЗП: точка, запятая, двоеточие, тире
+    s = re.sub(r' {4}([%s%s%s]*[%s]+[%s]*[%s]?)(?=[\n\r])' % (qu, nt_tr, tr, nt_tr, br, qu),
+               '    <pc ana="Nt,Tr">\\1</pc>', s)
 
     # Сокращения и прочее
     s = re.sub(r' {4}((в|вв|г|др|пр)\.)(?=[\n\r])', '    <w lex="\\1" gr="S,inan,|gender,|case,|number">\\1</w>', s)
+    s = re.sub(r' {4}(у\. ?е\.)(?=[\n\r])', '    <w lex="\\1" gr="S,inan,|gender,|case,|number">\\1</w>', s)
     s = re.sub(r' {4}(т\. ?к\.)(?=[\n\r])', '    <w lex="\\1" gr="CONJ">\\1</w>', s)
+    s = re.sub(r' {4}(\d+-\w)(?=[\n\r])', '    <w lex="\\1" gr="A,|gender,|case,plen,|number">\\1</w>', s)
     s = re.sub(r' {4}(\w\s*\))', '    <w lex="\\1" gr="NONLEX">\\1</w>', s)
 
     # Всё, что осталось, оформляем как glyph
@@ -123,15 +127,14 @@ def process(inpt_dir, otpt_dir, file):
         for j, node in enumerate(par):
             try:
                 next_node = par[j + 1]
-                next_pair = (par[j + 1], par[j + 2])
+                next_pair = '%s %s' % (par[j + 1].get('lex'), par[j + 2].get('lex'))
 
                 if node.tag == 'pc':
                     pc = etree.SubElement(p, 'pc')
                     pc.text = node.text
 
                     # Если следующий узел - союз из списка Арины, то это терминал
-                    if (next_node.get('gr') == 'CONJ' and next_node.get('lex') in conj.sing
-                            or (next_pair[0].get('lex'), next_pair[1].get('lex')) in conj.doub):
+                    if (next_node.get('lex') in conj.sing and next_node.get('gr') == 'CONJ') or next_pair in conj.doub:
                         pc.set('ana', 'Tr,_')
                     # If all else fails, признаём неоднозначность
                     else:
@@ -148,7 +151,10 @@ def process(inpt_dir, otpt_dir, file):
             finally:
                 if node.tag == 'w':
                     w = etree.SubElement(p, 'w')
-                    ana = format_parse(node.get('gr').split(';'))
+                    try:
+                        ana = format_parse(node.get('gr').split(';'))
+                    except AttributeError:
+                        ana = 'Zr'
 
                     w.text = node.text
                     w.set('lemma', node.get('lex'))
@@ -168,7 +174,7 @@ def process(inpt_dir, otpt_dir, file):
         xml = etree.tostring(otpt_tree, method='xml', encoding='utf-8', xml_declaration=True, pretty_print=True)
         otpt.write(xml.decode())
 
-    with open('glyph_log.csv', mode='w', encoding='utf-8') as log:
+    with open('glyph_log.txt', mode='w', encoding='utf-8') as log:
         log.write(glyph_log)
 
 
@@ -176,4 +182,4 @@ if __name__ == '__main__':
     try:
         process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt', 'LAW.xml')
     except FileNotFoundError:
-        print('Error: source data directory missing.')
+        print('Error: source file missing.')
