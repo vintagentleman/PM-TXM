@@ -1,10 +1,13 @@
 import glob
 import os
 import nltk
+import csv
+from collections import OrderedDict
 from xml.etree import ElementTree as etree
 from xml.dom.minidom import parseString
 from pymorphy2 import MorphAnalyzer
 from tags import pymorphy_all
+import conj
 
 
 def format_tag(t):
@@ -15,64 +18,94 @@ def format_tag(t):
     return '_'
 
 
-def format_parse(pt):
-    ana = []
+def format_parse_list(parse_list):
+    ana_list = []
 
-    for parse in pt:
-        pos = format_tag(parse.tag.POS)
+    for i, parse in enumerate(parse_list):
+        ana = OrderedDict()
 
-        animacy = format_tag(parse.tag.animacy)
-        case = format_tag(parse.tag.case)
-        number = format_tag(parse.tag.number)
-        gender = format_tag(parse.tag.gender)
-        person = format_tag(parse.tag.person)
-        aspect = format_tag(parse.tag.aspect)
+        for j, item in enumerate(parse):
+            pos = format_tag(item.tag.POS)
 
-        if pos == 'Nn':
+            if pos != '_':
+                animacy = format_tag(item.tag.animacy)
+                case = format_tag(item.tag.case)
+                number = format_tag(item.tag.number)
+                gender = format_tag(item.tag.gender)
+                person = format_tag(item.tag.person)
+                aspect = format_tag(item.tag.aspect)
 
-            if case != 'Ac':
-                animacy = '_'
+                if pos == 'Nn':
 
-            if number == 'Pl':
-                gender = '_'
+                    if case != 'Ac':
+                        animacy = '_'
 
-        elif pos == 'Vb':
+                    if number == 'Pl':
+                        gender = '_'
 
-            if person == '_' and number == 'Pl':
-                    gender = format_tag(parse.tag.person)
+                elif pos == 'Vb':
 
-        elif pos in ('Pt', 'Vp', 'Aj', 'Ap', 'Pn'):
+                    if person == '_' and number == 'Pl':
+                            gender = format_tag(item.tag.person)
 
-            if number == 'Pl':
-                gender = format_tag(parse.tag.gender)
+                elif pos in ('Pt', 'Vp', 'Aj', 'Ap', 'Pn'):
 
-        elif pos == '_':
-            pos = format_tag(str(parse.tag).split(',')[0])
+                    if number == 'Pl':
+                        gender = format_tag(item.tag.gender)
 
-        if all(grammeme == '_' for grammeme in (animacy, case, number, gender, person, aspect)):
-            ana += [pos]
-        else:
-            ana += [','.join((pos, animacy, case, number, gender, person, aspect))]
+                if all(grammeme == '_' for grammeme in (animacy, case, number, gender, person, aspect)):
+                    ana[pos] = item.normal_form
+                else:
+                    ana[','.join((pos, animacy, case, number, gender, person, aspect))] = item.normal_form
 
+            # Знаки препинания, числа, иностранные слова и прочее
+            else:
+                pos = format_tag(str(item.tag).split(',')[0])
+
+                if pos == 'PM':
+                    try:
+                        next_word = parse_list[i + 1][0]
+                        next_pair = '%s %s' % (parse_list[i + 1][0].normal_form, parse_list[i + 2][0].normal_form)
+
+                        # Терминал, если 1) в списке, 2) перед союзами
+                        if (item.normal_form in '?!;()[]//' or next_pair in conj.doub
+                                or next_word.tag.POS == 'CONJ' and next_word.normal_form in conj.sing):
+                            ana['pc,Tr,_'] = item.normal_form
+                        # Нетерминал, если в списке
+                        elif item.normal_form in '"%':
+                            ana['pc,Nt,_'] = item.normal_form
+                        # If all else fails, признаём неоднозначность
+                        else:
+                            for tag in ('pc,Nt,Tr', 'pc,Nt,_', 'pc,Tr,_'):
+                                ana[tag] = item.normal_form
+
+                    # Терминал, если 3) в конце предложения
+                    except IndexError:
+                        ana['pc,Tr,_'] = item.normal_form
+
+                else:
+                    ana[pos] = item.normal_form
+
+        ana_list.append(ana)
+
+    '''
     # Если мест.-пред., то отсекаем сущ.
-    for i, p in enumerate(ana):
-        if p.startswith('Pd'):
-            ana = ana[:i + 1] + [p for p in ana[i + 1:] if not p.startswith('Nn')]
+    for ana in ana_list:
+        for j, item in enumerate(ana):
+            if item[0].startswith('Pd'):
+                ana = ana[:j + 1] + [p for p in ana[j + 1:] if not p[0].startswith('Nn')]
 
     # Если союз, пред. или част., то отсекаем сущ., прил., мест. и межд.
-    for i, p in enumerate(ana):
-        if p.startswith(('Cj', 'Pp', 'Pc')):
-            ana = ana[:i + 1] + [p for p in ana[i + 1:] if not p.startswith(('Nn', 'Aj', 'Pn', 'Ij'))]
+    for ana in ana_list:
+        for j, item in enumerate(ana):
+            if item[0].startswith(('Cj', 'Pp', 'Pc')):
+                ana = ana[:j + 1] + [p for p in ana[j + 1:] if not p[0].startswith(('Nn', 'Aj', 'Pn', 'Ij'))]
+    '''
 
-    result = []
-    for item in ana:
-        if item not in result:
-            result += [item]
-
-    return result
+    return ana_list
 
 
-def process(inpt_dir, otpt_dir):
+def process(inpt_dir, otpt_dir, gold):
     # Создаём директорию с выходными данными на случай, если её нет
     os.makedirs(otpt_dir, exist_ok=True)
     # Если директории со входными данными нет, тут возбуждается исключение
@@ -83,6 +116,9 @@ def process(inpt_dir, otpt_dir):
     morph = MorphAnalyzer()
     files = glob.glob('*.txt')
 
+    gold_file = open(gold, mode='r', encoding='utf-8')
+    gold_reader = csv.reader(gold_file, delimiter=';')
+
     # Файлы с текстами обрабатываем поштучно
     for file in files:
         f = open(file, mode='r', encoding='windows-1251')
@@ -90,34 +126,76 @@ def process(inpt_dir, otpt_dir):
         lines = f.readlines()
 
         for line in lines:
-            p = etree.SubElement(root, 'p')
+            # Массив токенов
             line_tokens = nltk.word_tokenize(line)
+            # Массив упорядоченных словарей вида {разбор: лемма}
+            line_parses = format_parse_list([morph.parse(token) for token in line_tokens])
 
-            for i, token in enumerate(line_tokens):
-                # Форматируем разбор
-                parse_total = morph.parse(token)
-                ana = format_parse(parse_total)
+            p = etree.SubElement(root, 'p')
+            prev_ana = ''
 
-                ana = ' ; '.join(ana)
+            for i, ana in enumerate(line_parses):
+                parses = list(ana.keys())
+                check = 0
 
-                # Всё, что не является пунктуацией, - т. е. нормальные словоформы плюс токены из латинских букв
-                # (тип LATN), числа (NUMB либо ROMN) и неразобранные единицы (UNKN) - заключаем в тег <w></w>
-                if ana != 'PM':
-                    w = etree.SubElement(p, 'w')
-                    w.text = token
-                    # w.set('lemma', parse.normal_form)
-                    w.set('ana', ana)
-
-                # С пунктуацией всё просто
+                if parses[0].startswith('pc'):
+                    elem = etree.SubElement(p, 'pc')
                 else:
-                    pc = etree.SubElement(p, 'pc')
-                    pc.text = token
-                    if i == len(line_tokens)-1 or token in {'?', '!', ';', '(', ')', '//'}:
-                        pc.set('ana', 'pc,Tr,_')
-                    elif token == '"':
-                        pc.set('ana', 'pc,Nt,_')
+                    elem = etree.SubElement(p, 'w')
+                elem.text = line_tokens[i]
+
+                for row in gold_reader:
+                    # Если текущий элемент - однозначно терминальный ЗП, то искать с ним триграмму бессмысленно
+                    if parses[0] == 'pc,Tr,_':
+                        elem.set('lemma', ana['pc,Tr,_'])
+                        elem.set('ana', 'pc,Tr,_')
+
+                        prev_ana = 'pc,Tr,_'
+                        check += 1
+                        break
+
                     else:
-                        pc.set('ana', 'pc,Nt,Tr ; pc,Nt,_ ; pc,Tr,_')
+                        # Если находимся в абсолютном начале предложения/чанка, рассматриваем левые биграммы
+                        if i == 0 or prev_ana == 'pc,Tr,_':
+
+                            # Фолбэк к pymorphy2, если текущий элемент последний в предложении
+                            if i + 1 == len(line_parses):
+                                break
+                            else:
+                                if row[0] in parses and row[1] in list(line_parses[i + 1].keys()):
+                                    elem.set('lemma', ana[row[0]])
+                                    elem.set('ana', row[0])
+
+                                    prev_ana = row[0]
+                                    check += 1
+                                    break
+
+                        # Если текущий элемент последний в предложении, рассматриваем правые биграммы
+                        elif i + 1 == len(line_parses):
+                            if prev_ana == row[1] and row[2] in parses:
+                                elem.set('lemma', ana[row[2]])
+                                elem.set('ana', row[2])
+
+                                prev_ana = row[2]
+                                check += 1
+                                break
+
+                        # В других случаях рассматриваем полноценные триграммы
+                        else:
+                            if row[0] == prev_ana and row[1] in parses and row[2] in list(line_parses[i + 1].keys()):
+                                elem.set('lemma', ana[row[1]])
+                                elem.set('ana', row[1])
+
+                                prev_ana = row[1]
+                                check += 1
+                                break
+
+                # Фолбэк, если подходящей триграммы в золотом стандарте не нашлось
+                if not check:
+                    elem.set('lemma', ana[parses[0]])
+                    elem.set('ana', parses[0])
+
+                    prev_ana = parses[0]
 
         # Шагаем в выходную директорию
         os.chdir(otpt_dir)
@@ -132,9 +210,11 @@ def process(inpt_dir, otpt_dir):
         os.chdir(inpt_dir)
         f.close()
 
+    gold_file.close()
+
 
 if __name__ == '__main__':
     try:
-        process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt')
+        process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'ALL_trigrams.csv')
     except FileNotFoundError:
         print('Error: source data directory missing.')
