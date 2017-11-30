@@ -30,7 +30,7 @@ def get_trigrams(inpt_dir, file):
             lim = i + 3
 
             # Удаляем нехорошие
-            if {"pc,Tr", "pc,Tr,Nt"} & {splts[i], splts[i + 1]}:
+            if {"pc,Tr,_", "pc,Tr,Nt"} & {splts[i], splts[i + 1]}:
                 continue
             else:
                 trig_line = tuple(splts[i:lim])

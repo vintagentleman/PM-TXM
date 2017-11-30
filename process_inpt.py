@@ -91,8 +91,9 @@ def process(inpt_dir, otpt_dir):
 
         for line in lines:
             p = etree.SubElement(root, 'p')
+            line_tokens = nltk.word_tokenize(line)
 
-            for token in nltk.word_tokenize(line):
+            for i, token in enumerate(line_tokens):
                 # Форматируем разбор
                 parse_total = morph.parse(token)
                 ana = format_parse(parse_total)
@@ -111,6 +112,12 @@ def process(inpt_dir, otpt_dir):
                 else:
                     pc = etree.SubElement(p, 'pc')
                     pc.text = token
+                    if i == len(line_tokens)-1 or token in {'?', '!', ';', '(', ')', '//'}:
+                        pc.set('ana', 'pc,Tr,_')
+                    elif token == '"':
+                        pc.set('ana', 'pc,Nt,_')
+                    else:
+                        pc.set('ana', 'pc,Nt,Tr ; pc,Nt,_ ; pc,Tr,_')
 
         # Шагаем в выходную директорию
         os.chdir(otpt_dir)
