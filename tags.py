@@ -120,7 +120,7 @@ pymorphy_all = {
     'impf': 'Im',
 
     'PNCT': 'PM',
-    'NUMB': 'NUM',
+    'NUMB': 'NM',
     'LATN': 'Zr',
     'ROMN': 'Zr',
     'UNKN': 'Zr',
