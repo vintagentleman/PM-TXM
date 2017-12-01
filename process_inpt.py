@@ -64,12 +64,11 @@ def format_parse_list(parse_list):
 
                 if pos == 'PM':
                     try:
-                        next_word = parse_list[i + 1][0]
+                        next_word = parse_list[i + 1][0].normal_form
                         next_pair = '%s %s' % (parse_list[i + 1][0].normal_form, parse_list[i + 2][0].normal_form)
 
                         # Терминал, если 1) в списке, 2) перед союзами
-                        if (item.normal_form in '?!;()[]//' or next_pair in conj.doub
-                                or next_word.tag.POS == 'CONJ' and next_word.normal_form in conj.sing):
+                        if item.normal_form in '?!;()[]//' or next_pair in conj.doub or next_word in conj.sing:
                             ana['pc,Tr,_'] = item.normal_form
                         # Нетерминал, если в списке
                         elif item.normal_form in '"%':
@@ -125,6 +124,9 @@ def process(inpt_dir, otpt_dir, gold):
         root = etree.Element('text')
         lines = f.readlines()
 
+        # Массив для фолбэков
+        logmass = []
+
         for line in lines:
             # Массив токенов
             line_tokens = nltk.word_tokenize(line)
@@ -162,7 +164,7 @@ def process(inpt_dir, otpt_dir, gold):
                             if i + 1 == len(line_parses):
                                 break
                             else:
-                                if row[0] in parses and row[1] in list(line_parses[i + 1].keys()):
+                                if row[0] in parses and row[1] in line_parses[i + 1]:
                                     elem.set('lemma', ana[row[0]])
                                     elem.set('ana', row[0])
 
@@ -182,7 +184,7 @@ def process(inpt_dir, otpt_dir, gold):
 
                         # В других случаях рассматриваем полноценные триграммы
                         else:
-                            if row[0] == prev_ana and row[1] in parses and row[2] in list(line_parses[i + 1].keys()):
+                            if row[0] == prev_ana and row[1] in parses and row[2] in line_parses[i + 1]:
                                 elem.set('lemma', ana[row[1]])
                                 elem.set('ana', row[1])
 
@@ -195,6 +197,20 @@ def process(inpt_dir, otpt_dir, gold):
                     elem.set('lemma', ana[parses[0]])
                     elem.set('ana', parses[0])
 
+                    # Фиксируем триграммы, на которых случился фолбэк
+                    if i == 0:
+                        logstring = "[\n" + str(line_tokens[i]) + " : " + str(parses) + ";\n" + str(line_tokens[
+                            i + 1]) + " : " + str(list(line_parses[i + 1].keys())) + "\n]\n"
+                    elif i + 1 == len(line_parses):
+                        logstring = "[\n" + str(line_parses[i - 1]) + " : [" + str(
+                            prev_ana) + "];\n" + str(line_tokens[i]) + " : " + str(parses) + "\n]\n"
+                    else:
+                        logstring = "[\n" + str(line_tokens[i - 1]) + " : [" + str(
+                            prev_ana) + "];\n" + str(line_tokens[i]) + " : " + str(parses) + ";\n" + str(line_tokens[
+                                        i + 1]) + " : " + str(list(line_parses[i + 1].keys())) + "\n]\n"
+
+                    logmass.append(logstring)
+
                     prev_ana = parses[0]
 
         # Шагаем в выходную директорию
@@ -205,6 +221,11 @@ def process(inpt_dir, otpt_dir, gold):
             xml = etree.tostring(root, method='xml', encoding='utf-8')
             pretty = parseString(xml).toprettyxml(indent='  ', encoding='utf-8')
             out.write(pretty.decode())
+
+        # Записываем лог-файл
+        with open(file[:-4] + "_log_trg.txt", mode="w", encoding="utf-8") as log:
+            for line in logmass:
+                log.write(str(line) + "\n")
 
         # Возвращаемся во входную директорию - к файлам на очереди
         os.chdir(inpt_dir)
