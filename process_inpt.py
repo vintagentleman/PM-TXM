@@ -126,7 +126,7 @@ def process(inpt_dir, otpt_dir, gold):
                 parses = list(ana.keys())
                 check = False
 
-                if parses[0].startswith('pc'):
+                if parses[0].startswith('PM'):
                     elem = etree.SubElement(p, 'pc')
                 else:
                     elem = etree.SubElement(p, 'w')
