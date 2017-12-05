@@ -8,6 +8,15 @@ from xml.dom.minidom import parseString
 from pymorphy2 import MorphAnalyzer
 from tags import pymorphy_all
 import conj
+import time
+
+
+class Profiler(object):
+    def __enter__(self):
+        self._startTime = time.time()
+
+    def __exit__(self, type, value, traceback):
+        print("Elapsed time: {:.3f} sec".format(time.time() - self._startTime))
 
 
 def format_tag(t):
@@ -35,7 +44,7 @@ def format_parse_list(parse_list):
                 person = format_tag(item.tag.person)
                 aspect = format_tag(item.tag.aspect)
 
-                if pos == 'Nn':
+                if pos in ('Nn', 'Pn'):
                     if case != 'Ac':
                         animacy = '_'
 
@@ -132,7 +141,11 @@ def process(inpt_dir, otpt_dir, gold):
                     elem = etree.SubElement(p, 'w')
                 elem.text = line_tokens[j]
 
-                for row in gold_reader:
+                for delim, row in enumerate(gold_reader):
+
+                    if delim >= 20459:
+                        break
+
                     # Если текущий элемент - однозначно терминальный ЗП, то искать с ним триграмму бессмысленно
                     if parses[0] == 'PM,Tr,_':
                         elem.set('ana', 'PM,Tr,_')
@@ -242,6 +255,7 @@ def process(inpt_dir, otpt_dir, gold):
 
 if __name__ == '__main__':
     try:
-        process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'ALL_trigrams.csv')
+        with Profiler() as p:
+            process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'ALL_trigrams.csv')
     except FileNotFoundError:
         print('Error: source file missing.')
