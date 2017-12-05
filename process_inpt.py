@@ -93,18 +93,16 @@ def format_parse_list(parse_list):
 
     for i, ana in enumerate(ana_list):
         for j, item in enumerate(ana):
-
-            # Если мест.-пред., то отсекаем сущ.
-            if item.startswith('Pd'):
+            if item.startswith(('Pd', 'Pn', 'Cj', 'Pp', 'Pc')):
                 items = list(ana.items())
-                new_ana = items[:j + 1] + [pair for pair in items[j + 1:] if not pair[0].startswith('Nn')]
-                ana_list[i] = OrderedDict(new_ana)
-                break
 
-            # Если союз, пред. или част., то отсекаем сущ., прил., мест. и межд.
-            elif item.startswith(('Cj', 'Pp', 'Pc')):
-                items = list(ana.items())
-                new_ana = items[:j + 1] + [pair for pair in items[j + 1:] if not pair[0].startswith(('Nn', 'Aj', 'Pn', 'Ij'))]
+                # Если мест. или мест.-пред., то отсекаем сущ. и прил.-пред.
+                if item.startswith(('Pd', 'Pn')):
+                    new_ana = [pair for pair in items if not pair[0].startswith(('Nn', 'Ap'))]
+                # Если союз, пред. или част., то отсекаем сущ., прил., мест. и межд.
+                else:
+                    new_ana = [pair for pair in items if not pair[0].startswith(('Nn', 'Aj', 'Ap', 'Pn', 'Ij'))]
+
                 ana_list[i] = OrderedDict(new_ana)
                 break
 
@@ -120,7 +118,7 @@ def process(inpt_dir, otpt_dir, gold):
     print('Please wait. Python is processing your data...')
 
     morph = MorphAnalyzer()
-    files = glob.glob('*.txt')
+    files = glob.glob('egypt.txt')
 
     gold_file = open(gold, mode='r', encoding='utf-8', newline='')
 
@@ -160,7 +158,8 @@ def process(inpt_dir, otpt_dir, gold):
 
                 for offset, row in enumerate(gold_reader):
 
-                    if offset >= 20460:
+                    # Отсекаем триграммы с частотой < 4
+                    if row[3] == '3':
                         break
 
                     # Если текущий элемент - однозначно терминальный ЗП, то искать с ним триграмму бессмысленно
@@ -273,6 +272,6 @@ def process(inpt_dir, otpt_dir, gold):
 if __name__ == '__main__':
     try:
         with Profiler() as p:
-            process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'ALL_trigrams.csv')
+            process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'trigrams.csv')
     except FileNotFoundError:
         print('Error: source file missing.')
