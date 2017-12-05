@@ -70,7 +70,7 @@ def format_parse(pt):
         person = format_tag(p_set, tags.gold_person)
         aspect = format_tag(p_set, tags.gold_aspect)
 
-        if pos == 'Nn':
+        if pos in ('Nn', 'Pn'):
 
             if case != 'Ac':
                 animacy = '_'
@@ -101,11 +101,6 @@ def format_parse(pt):
             if number == 'Pl':
                 gender = '_'
 
-        elif pos == 'Pn':
-
-            if number == 'Pl':
-                gender = '_'
-
         elif pos == 'Nu':
 
             if 'comp' in p_set:
@@ -124,6 +119,9 @@ def process(inpt_dir, otpt_dir):
     os.chdir(inpt_dir)
     print('Please wait. Python is processing your data...')
     files = glob.glob('*.xml')
+
+    # Словарь для статистики
+    trg_dct = {}
 
     for file in files:
         inpt = open(file, mode='r', encoding='utf-8')
@@ -154,6 +152,9 @@ def process(inpt_dir, otpt_dir):
                         else:
                             pc.set('ana', node.get('ana'))
 
+                        trg_dct.setdefault(pc.get('ana'), 0)
+                        trg_dct[pc.get('ana')] += 1
+
                 # Если возбуждается исключение, то мы дошли до (пред)последнего узла
                 # Если это знак препинания, то это определённо терминал
                 except IndexError:
@@ -161,6 +162,9 @@ def process(inpt_dir, otpt_dir):
                         pc = etree.SubElement(p, 'pc')
                         pc.text = node.text
                         pc.set('ana', 'PM,Tr,_')
+
+                        trg_dct.setdefault(pc.get('ana'), 0)
+                        trg_dct[pc.get('ana')] += 1
 
                 finally:
                     if node.tag == 'w':
@@ -173,6 +177,9 @@ def process(inpt_dir, otpt_dir):
                         w.text = node.text
                         w.set('lemma', node.get('lex'))
                         w.set('ana', ana)
+
+                        trg_dct.setdefault(w.get('ana'), 0)
+                        trg_dct[w.get('ana')] += 1
 
                     elif node.tag == 'g':
                         g = etree.SubElement(p, 'g')
@@ -189,6 +196,10 @@ def process(inpt_dir, otpt_dir):
 
         with open(file[:-4] + '_glyph_log.txt', mode='w', encoding='utf-8') as log:
             log.write(glyph_log)
+
+        with open('trg_log.txt', mode='w', encoding='utf-8') as trg_log:
+            for pair in sorted(trg_dct.items(), key=lambda x: -x[1]):
+                trg_log.write('%s\t%d\n' % pair)
 
         os.chdir(inpt_dir)
         inpt.close()

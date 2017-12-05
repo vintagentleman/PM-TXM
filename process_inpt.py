@@ -91,6 +91,23 @@ def format_parse_list(parse_list):
 
         ana_list.append(ana)
 
+    for i, ana in enumerate(ana_list):
+        for j, item in enumerate(ana):
+
+            # Если мест.-пред., то отсекаем сущ.
+            if item.startswith('Pd'):
+                items = list(ana.items())
+                new_ana = items[:j + 1] + [pair for pair in items[j + 1:] if not pair[0].startswith('Nn')]
+                ana_list[i] = OrderedDict(new_ana)
+                break
+
+            # Если союз, пред. или част., то отсекаем сущ., прил., мест. и межд.
+            elif item.startswith(('Cj', 'Pp', 'Pc')):
+                items = list(ana.items())
+                new_ana = items[:j + 1] + [pair for pair in items[j + 1:] if not pair[0].startswith(('Nn', 'Aj', 'Pn', 'Ij'))]
+                ana_list[i] = OrderedDict(new_ana)
+                break
+
     return ana_list
 
 
@@ -141,9 +158,9 @@ def process(inpt_dir, otpt_dir, gold):
                     elem = etree.SubElement(p, 'w')
                 elem.text = line_tokens[j]
 
-                for delim, row in enumerate(gold_reader):
+                for offset, row in enumerate(gold_reader):
 
-                    if delim >= 20459:
+                    if offset >= 20460:
                         break
 
                     # Если текущий элемент - однозначно терминальный ЗП, то искать с ним триграмму бессмысленно
