@@ -217,7 +217,13 @@ def process(inpt_dir, otpt_dir, gold):
                     prev_ana = parses[0]
 
                     # Фиксируем триграммы, на которых случился фолбэк
-                    if j == 0:
+                    if j == 0 and len(line_tokens) == 1:
+                        log_data = '''\
+{
+    %s: %s,
+};
+''' % (str(line_tokens[j]), str(parses))
+                    elif j == 0:
                         log_data = '''\
 {
     %s: %s,
