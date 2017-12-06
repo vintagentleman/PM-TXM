@@ -118,7 +118,7 @@ def process(inpt_dir, otpt_dir, gold):
     print('Please wait. Python is processing your data...')
 
     morph = MorphAnalyzer()
-    files = glob.glob('egypt.txt')
+    files = glob.glob('*.txt')
 
     gold_file = open(gold, mode='r', encoding='utf-8', newline='')
 
@@ -156,7 +156,7 @@ def process(inpt_dir, otpt_dir, gold):
                     elem = etree.SubElement(p, 'w')
                 elem.text = line_tokens[j]
 
-                for offset, row in enumerate(gold_reader):
+                for row in gold_reader:
 
                     # Отсекаем триграммы с частотой < 4
                     if row[3] == '3':
