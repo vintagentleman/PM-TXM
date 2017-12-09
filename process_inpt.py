@@ -44,6 +44,9 @@ class Processor:
 
             return '_'
 
+        tr = ('?', '!', ';', '(', ')', '[', ']', '//')
+        nt = ("'", "''", '"', '``', '«', '»', '„', '“', '“', '”', '‘', '’', '%')
+
         for i, parse in enumerate(parses):
             result = OrderedDict()
 
@@ -85,18 +88,17 @@ class Processor:
 
                         # Терминал, если 1) в конце предложения
                         except IndexError:
-                            if item.normal_form in '\'\"«»„““”‘’%':
+                            if item.normal_form in nt:
                                 result['PM,Nt,_'] = item.normal_form
                             else:
                                 result['PM,Tr,_'] = item.normal_form
 
                         else:
                             # Терминал, если 2) в списке, 3) перед союзами
-                            if (item.normal_form in ('?', '!', ';', '(', ')', '[', ']', '//')
-                                    or next_word in conj.sing or next_pair in conj.doub):
+                            if item.normal_form in tr or next_word in conj.sing or next_pair in conj.doub:
                                 result['PM,Tr,_'] = item.normal_form
                             # Нетерминал, если в списке
-                            elif item.normal_form in '\'\"«»„““”‘’%':
+                            elif item.normal_form in nt:
                                 result['PM,Nt,_'] = item.normal_form
                             # If all else fails, признаём неоднозначность
                             else:
@@ -222,23 +224,23 @@ class Processor:
                         # Фиксируем триграммы, на которых случился фолбэк
                         if j == 0 and len(line_tokens) == 1:
                             log_data = generate_log(
-                                (str(line_tokens[j]), str(parses))
+                                (line_tokens[j], parses)
                             )
                         elif j == 0:
                             log_data = generate_log(
-                                (str(line_tokens[j]), str(parses)),
-                                (str(line_tokens[j + 1]), str(list(line_parses[j + 1])))
+                                (line_tokens[j], parses),
+                                (line_tokens[j + 1], list(line_parses[j + 1]))
                             )
                         elif j + 1 == len(line_parses):
                             log_data = generate_log(
-                                (str(line_tokens[j - 1]), str(previous)),
-                                (str(line_tokens[j]), str(parses))
+                                (line_tokens[j - 1], previous),
+                                (line_tokens[j], parses)
                             )
                         else:
                             log_data = generate_log(
-                                (str(line_tokens[j - 1]), str(previous)),
-                                (str(line_tokens[j]), str(parses)),
-                                (str(line_tokens[j + 1]), str(list(line_parses[j + 1])))
+                                (line_tokens[j - 1], previous),
+                                (line_tokens[j], parses),
+                                (line_tokens[j + 1], list(line_parses[j + 1]))
                             )
                         log_list.append(log_data)
 
