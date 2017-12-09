@@ -1,283 +1,282 @@
 import os
-import glob
-import nltk
 import csv
+import glob
+import time
 from collections import OrderedDict
-from xml.etree import ElementTree as etree
-from xml.dom.minidom import parseString
+from xml.dom.minidom import getDOMImplementation
+
+from nltk import word_tokenize
 from pymorphy2 import MorphAnalyzer
+
 from tags import pymorphy_all
 import conj
-import time
 
 
-class Profiler(object):
+class Profiler:
     def __enter__(self):
         self._startTime = time.time()
 
     def __exit__(self, type, value, traceback):
-        print("Elapsed time: {:.3f} sec".format(time.time() - self._startTime))
+        print('Elapsed time: {:.3f} sec'.format(time.time() - self._startTime))
 
 
-def format_tag(t):
+class Processor:
 
-    if t in pymorphy_all:
-        return pymorphy_all[t]
+    def __init__(self, inpt_dir, otpt_dir, gold_path, coding):
+        self.inpt_dir = inpt_dir
+        self.otpt_dir = otpt_dir
+        os.makedirs(self.otpt_dir, exist_ok=True)
 
-    return '_'
+        gold_file = open(gold_path, mode='r', encoding='utf-8', newline='')
+        self.gold_reader = list(row for row in csv.reader(gold_file, delimiter=';') if int(row[3]) > 3)
 
+        self.coding = coding
+        self.morph = MorphAnalyzer()
+        self.impl = getDOMImplementation()
 
-def format_parse_list(parse_list):
-    ana_list = []
+    @staticmethod
+    def format_parses(parses):
 
-    for i, parse in enumerate(parse_list):
-        ana = OrderedDict()
+        def format_tag(t):
 
-        for j, item in enumerate(parse):
-            pos = format_tag(item.tag.POS)
+            if t in pymorphy_all:
+                return pymorphy_all[t]
 
-            if pos != '_':
-                animacy = format_tag(item.tag.animacy)
-                case = format_tag(item.tag.case)
-                number = format_tag(item.tag.number)
-                gender = format_tag(item.tag.gender)
-                person = format_tag(item.tag.person)
-                aspect = format_tag(item.tag.aspect)
+            return '_'
 
-                if pos in ('Nn', 'Pn'):
-                    if case != 'Ac':
-                        animacy = '_'
+        for i, parse in enumerate(parses):
+            result = OrderedDict()
 
-                    if number == 'Pl':
-                        gender = '_'
+            for j, item in enumerate(parse):
+                pos = format_tag(item.tag.POS)
 
-                elif pos == 'Vb':
-                    if person == '_' and number == 'Pl':
-                        gender = '_'
+                if pos != '_':
+                    anim = format_tag(item.tag.animacy)
+                    case = format_tag(item.tag.case)
+                    num = format_tag(item.tag.number)
+                    gen = format_tag(item.tag.gender)
+                    pers = format_tag(item.tag.person)
+                    asp = format_tag(item.tag.aspect)
 
-                if all(grammeme == '_' for grammeme in (animacy, case, number, gender, person, aspect)):
-                    ana[pos] = item.normal_form
-                else:
-                    ana[','.join((pos, animacy, case, number, gender, person, aspect))] = item.normal_form
+                    if pos in ('Nn', 'Pn'):
+                        if case != 'Ac':
+                            anim = '_'
 
-            # Знаки препинания, числа, иностранные слова и прочее
-            else:
-                pos = format_tag(str(item.tag).split(',')[0])
+                        if num == 'Pl':
+                            gen = '_'
 
-                if pos == 'PM':
-                    try:
-                        next_word = parse_list[i + 1][0].normal_form
-                        next_pair = '%s %s' % (parse_list[i + 1][0].normal_form, parse_list[i + 2][0].normal_form)
+                    elif pos == 'Vb':
+                        if pers == '_' and num == 'Pl':
+                            gen = '_'
 
-                    # Терминал, если 1) в конце предложения
-                    except IndexError:
-                        ana['PM,Tr,_'] = item.normal_form
-
+                    if all(gram == '_' for gram in (anim, case, num, gen, pers, asp)):
+                        result[pos] = item.normal_form
                     else:
-                        # Терминал, если 2) в списке, 3) перед союзами
-                        if (item.normal_form in ('?', '!', ';', '(', ')', '[', ']', '//')
-                                or next_word in conj.sing or next_pair in conj.doub):
-                            ana['PM,Tr,_'] = item.normal_form
-                        # Нетерминал, если в списке
-                        elif item.normal_form in ('"', '%'):
-                            ana['PM,Nt,_'] = item.normal_form
-                        # If all else fails, признаём неоднозначность
-                        else:
-                            for tag in ('PM,Nt,Tr', 'PM,Nt,_', 'PM,Tr,_'):
-                                ana[tag] = item.normal_form
+                        result[','.join((pos, anim, case, num, gen, pers, asp))] = item.normal_form
 
+                # Знаки препинания, числа, иностранные слова и прочее
                 else:
-                    ana[pos] = item.normal_form
+                    pos = format_tag(str(item.tag).split(',')[0])
 
-        ana_list.append(ana)
+                    if pos == 'PM':
+                        try:
+                            next_word = parses[i + 1][0].normal_form
+                            next_pair = '%s %s' % (parses[i + 1][0].normal_form, parses[i + 2][0].normal_form)
 
-    for i, ana in enumerate(ana_list):
-        for j, item in enumerate(ana):
-            if item.startswith(('Pd', 'Pn', 'Cj', 'Pp', 'Pc')):
-                items = list(ana.items())
-
-                # Если мест. или мест.-пред., то отсекаем сущ. и прил.-пред.
-                if item.startswith(('Pd', 'Pn')):
-                    new_ana = [pair for pair in items if not pair[0].startswith(('Nn', 'Ap'))]
-                # Если союз, пред. или част., то отсекаем сущ., прил., мест. и межд.
-                else:
-                    new_ana = [pair for pair in items if not pair[0].startswith(('Nn', 'Aj', 'Ap', 'Pn', 'Ij'))]
-
-                ana_list[i] = OrderedDict(new_ana)
-                break
-
-    return ana_list
-
-
-def process(inpt_dir, otpt_dir, gold):
-    # Создаём директорию с выходными данными на случай, если её нет
-    os.makedirs(otpt_dir, exist_ok=True)
-    # Если директории со входными данными нет, тут возбуждается исключение
-    os.chdir(inpt_dir)
-    # Если директория есть, всё в порядке - программа начинает работу
-    print('Please wait. Python is processing your data...')
-
-    morph = MorphAnalyzer()
-    files = glob.glob('*.txt')
-
-    gold_file = open(gold, mode='r', encoding='utf-8', newline='')
-
-    # Файлы с текстами обрабатываем поштучно
-    for file in files:
-        f = open(file, mode='r', encoding='windows-1251')
-        lines = f.readlines()
-        root = etree.Element('text')
-
-        # Словарь для статистики
-        stat = {'breaks on start': 0, 'breaks on end': 0, 'regular breaks': 0, 'fallbacks': 0, 'terminal <pc>\'s': 0}
-        # Массив для фолбэков
-        log_list = []
-
-        for i, line in enumerate(lines):
-            # Массив токенов
-            line_tokens = nltk.word_tokenize(line)
-            # Массив упорядоченных словарей вида {разбор: лемма}
-            line_parses = format_parse_list([morph.parse(token) for token in line_tokens])
-
-            p = etree.SubElement(root, 'p')
-            p.set('n', str(i + 1))
-            prev_ana = ''
-
-            for j, ana in enumerate(line_parses):
-                gold_file.seek(0)
-                gold_reader = csv.reader(gold_file, delimiter=';')
-
-                parses = list(ana.keys())
-                check = False
-
-                if parses[0].startswith('PM'):
-                    elem = etree.SubElement(p, 'pc')
-                else:
-                    elem = etree.SubElement(p, 'w')
-                elem.text = line_tokens[j]
-
-                for row in gold_reader:
-
-                    # Отсекаем триграммы с частотой < 4
-                    if row[3] == '3':
-                        break
-
-                    # Если текущий элемент - однозначно терминальный ЗП, то искать с ним триграмму бессмысленно
-                    if parses[0] == 'PM,Tr,_':
-                        elem.set('ana', 'PM,Tr,_')
-                        elem.set('lemma', ana['PM,Tr,_'])
-                        prev_ana = 'PM,Tr,_'
-
-                        stat['terminal <pc>\'s'] += 1
-                        check = True
-
-                    else:
-                        # Если находимся в абсолютном начале предложения/чанка, рассматриваем левые биграммы
-                        if j == 0 or prev_ana == 'PM,Tr,_':
-
-                            # Фолбэк к pymorphy2, если текущий элемент последний в предложении
-                            if j + 1 == len(line_parses):
-                                break
+                        # Терминал, если 1) в конце предложения
+                        except IndexError:
+                            if item.normal_form in '\'\"«»„““”‘’%':
+                                result['PM,Nt,_'] = item.normal_form
                             else:
-                                if row[0] in parses and row[1] in line_parses[j + 1]:
-                                    elem.set('ana', row[0])
-                                    elem.set('lemma', ana[row[0]])
-                                    prev_ana = row[0]
+                                result['PM,Tr,_'] = item.normal_form
 
-                                    stat['breaks on start'] += 1
-                                    check = True
-
-                        # Если текущий элемент последний в предложении, рассматриваем правые биграммы
-                        elif j + 1 == len(line_parses):
-                            if prev_ana == row[1] and row[2] in parses:
-                                elem.set('ana', row[2])
-                                elem.set('lemma', ana[row[2]])
-                                prev_ana = row[2]
-
-                                stat['breaks on end'] += 1
-                                check = True
-
-                        # В других случаях рассматриваем полноценные триграммы
                         else:
-                            if row[0] == prev_ana and row[1] in parses and row[2] in line_parses[j + 1]:
-                                elem.set('ana', row[1])
-                                elem.set('lemma', ana[row[1]])
-                                prev_ana = row[1]
+                            # Терминал, если 2) в списке, 3) перед союзами
+                            if (item.normal_form in ('?', '!', ';', '(', ')', '[', ']', '//')
+                                    or next_word in conj.sing or next_pair in conj.doub):
+                                result['PM,Tr,_'] = item.normal_form
+                            # Нетерминал, если в списке
+                            elif item.normal_form in '\'\"«»„““”‘’%':
+                                result['PM,Nt,_'] = item.normal_form
+                            # If all else fails, признаём неоднозначность
+                            else:
+                                for tag in ('PM,Nt,Tr', 'PM,Nt,_', 'PM,Tr,_'):
+                                    result[tag] = item.normal_form
 
-                                stat['regular breaks'] += 1
-                                check = True
-
-                    if check:
-                        break
-
-                # Фолбэк, если подходящей триграммы в золотом стандарте не нашлось
-                if not check:
-                    elem.set('ana', parses[0])
-                    elem.set('lemma', ana[parses[0]])
-                    prev_ana = parses[0]
-
-                    # Фиксируем триграммы, на которых случился фолбэк
-                    if j == 0 and len(line_tokens) == 1:
-                        log_data = '''\
-{
-    %s: %s,
-};
-''' % (str(line_tokens[j]), str(parses))
-                    elif j == 0:
-                        log_data = '''\
-{
-    %s: %s,
-    %s: %s,
-};
-''' % (str(line_tokens[j]), str(parses), str(line_tokens[j + 1]), str(list(line_parses[j + 1].keys())))
-                    elif j + 1 == len(line_parses):
-                        log_data = '''\
-{
-    %s: %s,
-    %s: %s,
-};
-''' % (str(line_tokens[j - 1]), str(prev_ana), str(line_tokens[j]), str(parses))
                     else:
-                        log_data = '''\
-{
-    %s: %s,
-    %s: %s,
-    %s: %s,
-};
-''' % (str(line_tokens[j - 1]), str(prev_ana), str(line_tokens[j]), str(parses), str(line_tokens[j + 1]), str(list(line_parses[j + 1].keys())))
+                        result[pos] = item.normal_form
 
-                    log_list.append(log_data)
-                    stat['fallbacks'] += 1
+            for item in result:
+                if item.startswith(('Pn', 'Pd', 'Cj', 'Pp', 'Pc')):
+                    # Если местоимение или местоимение-предикатив,
+                    # то отсекаем существительные и прилагательные-предикативы
+                    if item.startswith(('Pn', 'Pd')):
+                        new = [pair for pair in result.items() if not pair[0].startswith(
+                            ('Nn', 'Ap')
+                        )]
+                    # Если союз, предлог или частица,
+                    # то отсекаем существительные, прилагательные, местоимения и междометия
+                    else:
+                        new = [pair for pair in result.items() if not pair[0].startswith(
+                            ('Nn', 'Aj', 'Ap', 'Pn', 'Pd', 'Ij')
+                        )]
 
-        # Шагаем в выходную директорию
-        os.chdir(otpt_dir)
+                    result = OrderedDict(new)
+                    break
 
-        # Записываем в XML
-        with open(file[:-3] + 'xml', mode='w', encoding='utf-8') as out:
-            xml = etree.tostring(root, method='xml', encoding='utf-8')
-            pretty = parseString(xml).toprettyxml(indent='  ', encoding='utf-8')
-            out.write(pretty.decode())
+            yield result
 
-        # Записываем фолбэки в лог-файл
-        with open(file[:-4] + '_log_trg.txt', mode='w', encoding='utf-8') as log:
-            for line in log_list:
-                log.write(str(line) + '\n')
+    def process(self):
 
-        # Выдаём статистику по файлу
-        print(file)
-        for key in stat:
-            print('    %d %s' % (stat[key], key))
+        def generate_log(*pairs):
+            s = '{\n'
 
-        # Возвращаемся во входную директорию - к файлам на очереди
-        os.chdir(inpt_dir)
-        f.close()
+            for pair in pairs:
+                s += '    %s: %s,\n' % pair
 
-    gold_file.close()
+            s += '};\n'
+
+            return s
+
+        os.chdir(self.inpt_dir)
+        print('Please wait. Python is processing your data...')
+
+        for file in glob.glob('*.txt'):
+            fo = open(file, mode='r', encoding=self.coding)
+            doc = self.impl.createDocument(None, 'text', None)
+            root = doc.documentElement
+
+            # Словарь для статистики
+            stat = {
+                'breaks on start': 0,
+                'regular breaks': 0,
+                'breaks on end': 0,
+                'fallbacks': 0,
+                'terminals': 0
+            }
+            # Массив для фолбэков
+            log_list = []
+
+            for i, line in enumerate(fo.readlines()):
+                # Массив токенов
+                line_tokens = word_tokenize(line)
+                # Массив упорядоченных словарей вида {разбор: лемма}
+                line_parses = list(self.format_parses([self.morph.parse(token) for token in line_tokens]))
+
+                p = doc.createElement('p')
+                p.setAttribute('n', str(i + 1))
+
+                previous = ''
+
+                for j, parse_odict in enumerate(line_parses):
+                    parses = list(parse_odict)
+
+                    if parses[0].startswith('PM'):
+                        elem = doc.createElement('pc')
+                    else:
+                        elem = doc.createElement('w')
+
+                    elem_text = doc.createTextNode(line_tokens[j])
+                    elem.appendChild(elem_text)
+
+                    for row in self.gold_reader:
+                        # Если текущий элемент - однозначно терминальный ЗП, то искать с ним триграмму бессмысленно
+                        if parses[0] == 'PM,Tr,_':
+                            elem.setAttribute('ana', 'PM,Tr,_')
+                            elem.setAttribute('lemma', parse_odict['PM,Tr,_'])
+                            previous = 'PM,Tr,_'
+                            stat['terminals'] += 1
+
+                        else:
+                            # Если находимся в абсолютном начале предложения/чанка, рассматриваем левые биграммы
+                            # Фолбэк к pymorphy2, только если текущий элемент последний в предложении
+                            if j == 0 or previous == 'PM,Tr,_':
+                                if j + 1 != len(line_parses):
+                                    if row[0] in parses and row[1] in line_parses[j + 1]:
+                                        elem.setAttribute('ana', row[0])
+                                        elem.setAttribute('lemma', parse_odict[row[0]])
+                                        previous = row[0]
+                                        stat['breaks on start'] += 1
+
+                            # Если текущий элемент последний в предложении, рассматриваем правые биграммы
+                            elif j + 1 == len(line_parses):
+                                if previous == row[1] and row[2] in parses:
+                                    elem.setAttribute('ana', row[2])
+                                    elem.setAttribute('lemma', parse_odict[row[2]])
+                                    previous = row[2]
+                                    stat['breaks on end'] += 1
+
+                            # В других случаях рассматриваем полноценные триграммы
+                            else:
+                                if row[0] == previous and row[1] in parses and row[2] in line_parses[j + 1]:
+                                    elem.setAttribute('ana', row[1])
+                                    elem.setAttribute('lemma', parse_odict[row[1]])
+                                    previous = row[1]
+                                    stat['regular breaks'] += 1
+
+                        if elem.hasAttributes():
+                            break
+
+                    # Фолбэк, если подходящей триграммы в золотом стандарте не нашлось
+                    if not elem.hasAttributes():
+                        # Фиксируем триграммы, на которых случился фолбэк
+                        if j == 0 and len(line_tokens) == 1:
+                            log_data = generate_log(
+                                (str(line_tokens[j]), str(parses))
+                            )
+                        elif j == 0:
+                            log_data = generate_log(
+                                (str(line_tokens[j]), str(parses)),
+                                (str(line_tokens[j + 1]), str(list(line_parses[j + 1])))
+                            )
+                        elif j + 1 == len(line_parses):
+                            log_data = generate_log(
+                                (str(line_tokens[j - 1]), str(previous)),
+                                (str(line_tokens[j]), str(parses))
+                            )
+                        else:
+                            log_data = generate_log(
+                                (str(line_tokens[j - 1]), str(previous)),
+                                (str(line_tokens[j]), str(parses)),
+                                (str(line_tokens[j + 1]), str(list(line_parses[j + 1])))
+                            )
+                        log_list.append(log_data)
+
+                        elem.setAttribute('ana', parses[0])
+                        elem.setAttribute('lemma', parse_odict[parses[0]])
+                        previous = parses[0]
+                        stat['fallbacks'] += 1
+
+                    p.appendChild(elem)
+                root.appendChild(p)
+
+            # Шагаем в выходную директорию
+            os.chdir(self.otpt_dir)
+
+            # Записываем в XML
+            with open(file[:-3] + 'xml', mode='w', encoding='utf-8') as out:
+                xml = doc.toprettyxml(indent='  ', encoding='utf-8')
+                out.write(xml.decode())
+
+            # Записываем фолбэки в лог-файл
+            with open(file[:-4] + '_log.txt', mode='w', encoding='utf-8') as log:
+                for line in log_list:
+                    log.write(line + '\n')
+
+            # Выдаём статистику по файлу
+            print(file)
+            for key in stat:
+                print('    %d %s' % (stat[key], key))
+
+            # Возвращаемся во входную директорию - к следующим файлам
+            os.chdir(self.inpt_dir)
+            doc.unlink()
+            fo.close()
 
 
 if __name__ == '__main__':
     try:
-        with Profiler() as p:
-            process(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'trigrams.csv')
+        with Profiler():
+            Processor(os.getcwd() + '\\inpt', os.getcwd() + '\\otpt', 'trigrams.csv', 'windows-1251').process()
     except FileNotFoundError:
         print('Error: source file missing.')
