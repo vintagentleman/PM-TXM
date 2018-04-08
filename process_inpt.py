@@ -1,15 +1,13 @@
 import os
 import csv
 import glob
+import json
 import time
 from collections import OrderedDict
 from xml.dom.minidom import getDOMImplementation
 
 from nltk import word_tokenize
 from pymorphy2 import MorphAnalyzer
-
-from tags import pymorphy_all
-import conj
 
 
 class Profiler:
@@ -34,32 +32,32 @@ class Processor:
         self.morph = MorphAnalyzer()
         self.impl = getDOMImplementation()
 
-    @staticmethod
-    def format_parses(parses):
+        self.tr = ('?', '!', ';', '(', ')', '[', ']', '//')
+        self.nt = ("'", "''", '"', '``', '«', '»', '„', '“', '“', '”', '‘', '’', '%')
+        self.prep = json.load(open('prep.json', mode='r', encoding='utf-8'))
+        self.conj = json.load(open('conj.json', mode='r', encoding='utf-8'))
+        self.tags = json.load(open('tags_inpt.json', mode='r', encoding='utf-8'))
 
-        def format_tag(t):
-
-            if t in pymorphy_all:
-                return pymorphy_all[t]
-
-            return '_'
-
-        tr = ('?', '!', ';', '(', ')', '[', ']', '//')
-        nt = ("'", "''", '"', '``', '«', '»', '„', '“', '“', '”', '‘', '’', '%')
+    def format_parses(self, parses):
 
         for i, parse in enumerate(parses):
             result = OrderedDict()
 
+            if i > 1:
+                prev_word = parses[i - 1][0].normal_form
+            else:
+                prev_word = ''
+
             for j, item in enumerate(parse):
-                pos = format_tag(item.tag.POS)
+                pos = self.tags.get(item.tag.POS, '_')
 
                 if pos != '_':
-                    anim = format_tag(item.tag.animacy)
-                    case = format_tag(item.tag.case)
-                    num = format_tag(item.tag.number)
-                    gen = format_tag(item.tag.gender)
-                    pers = format_tag(item.tag.person)
-                    asp = format_tag(item.tag.aspect)
+                    anim = self.tags.get(item.tag.animacy, '_')
+                    case = self.tags.get(item.tag.case, '_')
+                    num = self.tags.get(item.tag.number, '_')
+                    gen = self.tags.get(item.tag.gender, '_')
+                    pers = self.tags.get(item.tag.person, '_')
+                    asp = self.tags.get(item.tag.aspect, '_')
 
                     if pos in ('Nn', 'Pn'):
                         if case != 'Ac':
@@ -79,7 +77,7 @@ class Processor:
 
                 # Знаки препинания, числа, иностранные слова и прочее
                 else:
-                    pos = format_tag(str(item.tag).split(',')[0])
+                    pos = self.tags.get(str(item.tag).split(',')[0], '_')
 
                     if pos == 'PM':
                         try:
@@ -88,17 +86,17 @@ class Processor:
 
                         # Терминал, если 1) в конце предложения
                         except IndexError:
-                            if item.normal_form in nt:
+                            if item.normal_form in self.nt:
                                 result['PM,Nt,_'] = item.normal_form
                             else:
                                 result['PM,Tr,_'] = item.normal_form
 
                         else:
                             # Терминал, если 2) в списке, 3) перед союзами
-                            if item.normal_form in tr or next_word in conj.sing or next_pair in conj.doub:
+                            if item.normal_form in self.tr or next_word in self.conj['Sg'] or next_pair in self.conj['Db']:
                                 result['PM,Tr,_'] = item.normal_form
                             # Нетерминал, если в списке
-                            elif item.normal_form in nt:
+                            elif item.normal_form in self.nt:
                                 result['PM,Nt,_'] = item.normal_form
                             # If all else fails, признаём неоднозначность
                             else:
@@ -109,6 +107,13 @@ class Processor:
                         result[pos] = item.normal_form
 
             for item in result:
+
+                if not item.startswith('PM') and prev_word in self.prep:
+                    new = [pair for pair in result.items() if any(cs in pair[0] for cs in self.prep[prev_word])]
+                    if new:
+                        result = OrderedDict(new)
+                    break
+
                 if item.startswith(('Pn', 'Pd', 'Cj', 'Pp', 'Pc')):
                     # Если местоимение или местоимение-предикатив,
                     # то отсекаем существительные и прилагательные-предикативы
