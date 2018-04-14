@@ -1,9 +1,9 @@
 import os
 import glob
+import json
 import re
 from lxml import etree
 import tags
-import conj
 
 
 def format_text(s):
@@ -146,7 +146,7 @@ def process(inpt_dir, otpt_dir):
                         pc.text = node.text
 
                         # Если следующий узел - союз из списка Арины, то это терминал
-                        if next_node in conj.sing or next_pair in conj.doub:
+                        if next_node in conj['Sg'] or next_pair in conj['Db']:
                             pc.set('ana', 'PM,Tr,_')
                         # If all else fails, признаём неоднозначность
                         else:
@@ -207,6 +207,7 @@ def process(inpt_dir, otpt_dir):
 
 if __name__ == '__main__':
     try:
+        conj = json.load(open('conj.json', mode='r', encoding='utf-8'))
         process(os.getcwd() + '\\gold', os.getcwd() + '\\otpt')
     except FileNotFoundError:
         print('Error: source file missing.')

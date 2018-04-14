@@ -34,6 +34,7 @@ class Processor:
 
         self.tr = ('?', '!', ';', '(', ')', '[', ']', '//')
         self.nt = ("'", "''", '"', '``', '«', '»', '„', '“', '“', '”', '‘', '’', '%')
+        self.abbr = json.load(open('abbr.json', mode='r', encoding='utf-8'))
         self.prep = json.load(open('prep.json', mode='r', encoding='utf-8'))
         self.conj = json.load(open('conj.json', mode='r', encoding='utf-8'))
         self.tags = json.load(open('tags_inpt.json', mode='r', encoding='utf-8'))
@@ -97,6 +98,9 @@ class Processor:
                                 result['PM,Tr,_'] = item.normal_form
                             # Нетерминал, если в списке
                             elif item.normal_form in self.nt:
+                                result['PM,Nt,_'] = item.normal_form
+                            # Точка - нетерминал, если а) после односимвольного токена или б) часть сокращения
+                            elif item.normal_form == '.' and len(prev_word) == 1 or prev_word + item.normal_form in self.abbr:
                                 result['PM,Nt,_'] = item.normal_form
                             # If all else fails, признаём неоднозначность
                             else:
