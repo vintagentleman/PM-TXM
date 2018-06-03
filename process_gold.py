@@ -72,8 +72,8 @@ def format_parse(pt):
 
         if pos in ('Nn', 'Pn'):
 
-            if case != 'Ac':
-                animacy = '_'
+            # if case != 'Ac':
+            #     animacy = '_'
 
             if number == 'Pl':
                 gender = '_'

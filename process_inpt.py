@@ -61,8 +61,8 @@ class Processor:
                     asp = self.tags.get(item.tag.aspect, '_')
 
                     if pos in ('Nn', 'Pn'):
-                        if case != 'Ac':
-                            anim = '_'
+                        # if case != 'Ac':
+                        #     anim = '_'
 
                         if num == 'Pl':
                             gen = '_'
